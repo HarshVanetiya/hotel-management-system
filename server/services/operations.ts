@@ -136,10 +136,13 @@ export async function getDashboard(actor: Actor) {
     .from(reservations)
     .where(eq(reservations.hotelId, actor.hotelId));
 
+  // "Due now" = stays that have started (in house or checked out). Unpaid future
+  // bookings are reported separately because they are not yet payable.
   const outstandingQuery = db
     .select({
-      amount: sql<string>`coalesce(sum(greatest(${balanceSql}, 0)), 0)`,
-      reservations: sql<number>`count(*) filter (where ${balanceSql} > 0)::int`,
+      amount: sql<string>`coalesce(sum(greatest(${balanceSql}, 0)) filter (where ${reservations.status} in ('checked_in', 'checked_out')), 0)`,
+      reservations: sql<number>`count(*) filter (where ${reservations.status} in ('checked_in', 'checked_out') and ${balanceSql} > 0)::int`,
+      upcomingAmount: sql<string>`coalesce(sum(greatest(${balanceSql}, 0)) filter (where ${reservations.status} in ('pending', 'confirmed')), 0)`,
     })
     .from(reservations)
     .where(and(eq(reservations.hotelId, actor.hotelId), inArray(reservations.status, [...SOLD_STATUSES])));

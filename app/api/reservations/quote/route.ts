@@ -17,7 +17,8 @@ export const POST = apiRoute(
   async ({ actor, body }) => {
     const input = parseInput(quoteSchema, await body());
     const hotel = await getHotelOrThrow(db, actor.hotelId);
-    const { cents: _cents, ...pricing } = calculateStayPricing({ ...input, taxRate: hotel.taxRate });
+    const { cents, ...pricing } = calculateStayPricing({ ...input, taxRate: hotel.taxRate });
+    void cents;
     return { pricing };
   },
   { permission: "reservations:view" },

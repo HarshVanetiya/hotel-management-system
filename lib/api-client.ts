@@ -39,7 +39,9 @@ export async function apiRequest<T = unknown>(
   if (!res.ok) {
     const e = data?.error;
     if (res.status === 401) {
-      window.location.href = "/login";
+      // Session expired: a full navigation intentionally drops all client state.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname)}`);
     }
     throw new ApiError(e?.message ?? `Request failed (${res.status})`, res.status, e?.code ?? "error", e?.details ?? null);
   }

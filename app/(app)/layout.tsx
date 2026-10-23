@@ -1,5 +1,7 @@
 import { Hotel } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
+import { DeniedToast } from "@/components/app/denied-toast";
 import { MobileNav } from "@/components/app/mobile-nav";
 import { SidebarNav } from "@/components/app/sidebar-nav";
 import { UserMenu } from "@/components/app/user-menu";
@@ -44,6 +46,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <UserMenu name={actor.name} email={actor.email} roleLabel={ROLE_LABELS[actor.role]} />
         </header>
         <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6">{children}</main>
+        <Suspense>
+          <DeniedToast />
+        </Suspense>
       </div>
     </div>
   );

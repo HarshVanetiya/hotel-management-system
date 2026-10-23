@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Field } from "@/components/app/field";
 import { useApiAction } from "@/hooks/use-api-action";
+import { useKeyedFetch } from "@/hooks/use-keyed-fetch";
 import { apiRequest } from "@/lib/api-client";
 import { PAYMENT_METHOD_LABELS } from "@/lib/format";
 import { formatMoney, toCents } from "@/lib/utils/money";
@@ -67,8 +68,8 @@ export function RecordPaymentDialog({
     defaultValues: { amount: "", method: methods[0] ?? "cash", transactionReference: "", notes: "" },
   });
 
-  useEffect(() => {
-    if (open) {
+  function handleOpenChange(next: boolean) {
+    if (next) {
       setIdempotencyKey(crypto.randomUUID());
       setSelected(reservation ?? null);
       const due = reservation ? toCents(reservation.balance) : 0;
@@ -79,7 +80,8 @@ export function RecordPaymentDialog({
         notes: "",
       });
     }
-  }, [open, reservation, methods, form]);
+    setOpen(next);
+  }
 
   const onSubmit = form.handleSubmit(async (values) => {
     if (!selected) return;
@@ -102,7 +104,7 @@ export function RecordPaymentDialog({
   const balanceCents = selected ? toCents(selected.balance) : 0;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -190,33 +192,14 @@ function ReservationLookup({
   currency: string;
 }) {
   const [q, setQ] = useState("");
-  const [results, setResults] = useState<LookupResult[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (q.trim().length < 2) {
-      setResults([]);
-      return;
-    }
-    const ctrl = new AbortController();
-    const t = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const data = await apiRequest<{ results: LookupResult[] }>(`/api/reservations/lookup?q=${encodeURIComponent(q)}`, {
-          signal: ctrl.signal,
-        });
-        setResults(data.results);
-      } catch {
-        /* ignore aborted/failed lookups */
-      } finally {
-        setLoading(false);
-      }
-    }, 250);
-    return () => {
-      clearTimeout(t);
-      ctrl.abort();
-    };
-  }, [q]);
+  const term = q.trim();
+  const lookup = useKeyedFetch(term.length >= 2 ? term : null, (signal) =>
+    apiRequest<{ results: LookupResult[] }>(`/api/reservations/lookup?q=${encodeURIComponent(term)}`, { signal }).then(
+      (d) => d.results,
+    ),
+  250);
+  const results = lookup.data ?? [];
+  const loading = lookup.loading;
 
   return (
     <div className="grid gap-3">

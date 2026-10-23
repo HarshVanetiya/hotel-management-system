@@ -151,9 +151,11 @@ describe("dashboard and reports use real data", () => {
     expect(d.reservations.arrivals).toBe(2);
     expect(d.reservations.inHouseReservations).toBe(1);
     expect(d.occupancyRate).toBe(0.5);
-    // Two unpaid stays: 2 nights x 2500 + 12% tax, and 1 night x 2500 + 12% tax.
-    expect(d.outstanding.amount).toBe("8400.00");
-    expect(d.outstanding.reservations).toBe(2);
+    // Due now: the in-house stay (2 nights x 2500 + 12% tax). The confirmed
+    // arrival (1 night x 2500 + 12% tax) is not yet due.
+    expect(d.outstanding.amount).toBe("5600.00");
+    expect(d.outstanding.reservations).toBe(1);
+    expect(d.outstanding.upcomingAmount).toBe("2800.00");
     const report = await runReport(fx.admin, "occupancy", { from: day(0), to: day(0) });
     expect(report.rows[0].occupied).toBe(2);
   });

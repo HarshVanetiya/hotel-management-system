@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Loader2, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -55,21 +55,21 @@ export function CheckOutDialog({
     }
   }
 
-  useEffect(() => {
-    if (open) {
+  function handleOpenChange(next: boolean) {
+    if (next) {
       setFolio(null);
       setAck(false);
       void load();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+    setOpen(next);
+  }
 
   const b = folio?.balance;
   const owing = b ? b.balance > 0 : false;
   const fmt = (c: number) => formatCents(c, currency);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent>
         <DialogHeader>

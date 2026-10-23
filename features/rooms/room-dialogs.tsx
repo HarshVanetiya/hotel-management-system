@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Loader2 } from "lucide-react";
@@ -226,6 +226,7 @@ export function RoomTypeDialog({
         active: roomType?.active ?? true,
       });
   }, [open, roomType, form]);
+  const activeValue = useWatch({ control: form.control, name: "active" });
   const onSubmit = form.handleSubmit(async (v) => {
     const body = {
       ...v,
@@ -272,7 +273,7 @@ export function RoomTypeDialog({
             <Input id="t-amen" placeholder="Wi-Fi, Air conditioning, Balcony" {...form.register("amenities")} />
           </Field>
           <div className="flex items-center gap-2">
-            <Checkbox id="t-active" checked={form.watch("active")} onCheckedChange={(c) => form.setValue("active", c === true)} />
+            <Checkbox id="t-active" checked={activeValue} onCheckedChange={(c) => form.setValue("active", c === true)} />
             <Label htmlFor="t-active" className="font-normal">
               Active (available for new rooms and bookings)
             </Label>

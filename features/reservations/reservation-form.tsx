@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
+import { useKeyedFetch } from "@/hooks/use-keyed-fetch";
 import { ApiError, apiRequest } from "@/lib/api-client";
 import { ID_TYPE_LABELS, PAYMENT_METHOD_LABELS } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -163,39 +164,24 @@ export function ReservationForm(props: ReservationFormProps) {
   const w = useWatch({ control: form.control });
 
   // ---- Availability (server) -------------------------------------------------
-  const [rooms, setRooms] = useState<AvailableRoom[] | null>(null);
-  const [roomsLoading, setRoomsLoading] = useState(false);
-  const [roomsError, setRoomsError] = useState<string | null>(null);
   const totalGuests = (Number(w.adults) || 0) + (Number(w.children) || 0);
   const datesValid = Boolean(
     w.checkInDate && w.checkOutDate && isISODate(w.checkInDate) && isISODate(w.checkOutDate) && w.checkOutDate > w.checkInDate,
   );
-
-  useEffect(() => {
-    if (!datesValid || inHouse) {
-      setRooms(null);
-      return;
-    }
-    const ctrl = new AbortController();
+  let availabilityQuery: string | null = null;
+  if (datesValid && !inHouse) {
     const params = new URLSearchParams({ checkInDate: w.checkInDate!, checkOutDate: w.checkOutDate! });
     if (w.roomTypeId) params.set("roomTypeId", w.roomTypeId);
     if (totalGuests > 0) params.set("guests", String(totalGuests));
     if (reservation) params.set("excludeReservationId", reservation.id);
-    setRoomsLoading(true);
-    setRoomsError(null);
-    const t = setTimeout(() => {
-      apiRequest<{ rooms: AvailableRoom[] }>(`/api/availability?${params}`, { signal: ctrl.signal })
-        .then((d) => setRooms(d.rooms))
-        .catch((e) => {
-          if ((e as Error).name !== "AbortError") setRoomsError((e as Error).message);
-        })
-        .finally(() => setRoomsLoading(false));
-    }, 200);
-    return () => {
-      clearTimeout(t);
-      ctrl.abort();
-    };
-  }, [datesValid, w.checkInDate, w.checkOutDate, w.roomTypeId, totalGuests, reservation, inHouse]);
+    availabilityQuery = params.toString();
+  }
+  const availability = useKeyedFetch(availabilityQuery, (signal) =>
+    apiRequest<{ rooms: AvailableRoom[] }>(`/api/availability?${availabilityQuery}`, { signal }).then((d) => d.rooms),
+  );
+  const rooms = availability.data;
+  const roomsLoading = availability.loading;
+  const roomsError = availability.error;
 
   // Drop a selected room that is no longer available for the chosen dates/guests.
   useEffect(() => {
@@ -205,32 +191,19 @@ export function ReservationForm(props: ReservationFormProps) {
   const selectedRoom = rooms?.find((r) => r.id === w.roomId);
 
   // ---- Server quote --------------------------------------------------------------
-  const [quote, setQuote] = useState<Quote | null>(null);
-  const [quoteError, setQuoteError] = useState<string | null>(null);
   const effectiveRate = w.nightlyRate || selectedRoom?.basePrice || "";
-  useEffect(() => {
-    setQuote(null);
-    setQuoteError(null);
-    if (!datesValid || !effectiveRate || !MONEY.test(effectiveRate)) return;
-    const discount = w.discountAmount || "0";
-    if (!MONEY.test(discount)) return;
-    const ctrl = new AbortController();
-    const t = setTimeout(() => {
-      apiRequest<{ pricing: Quote }>("/api/reservations/quote", {
-        method: "POST",
-        body: { checkInDate: w.checkInDate, checkOutDate: w.checkOutDate, nightlyRate: effectiveRate, discountAmount: discount },
-        signal: ctrl.signal,
-      })
-        .then((d) => setQuote(d.pricing))
-        .catch((e) => {
-          if ((e as Error).name !== "AbortError") setQuoteError((e as Error).message);
-        });
-    }, 250);
-    return () => {
-      clearTimeout(t);
-      ctrl.abort();
-    };
-  }, [datesValid, w.checkInDate, w.checkOutDate, effectiveRate, w.discountAmount]);
+  const discountInput = w.discountAmount || "0";
+  const quoteBody =
+    datesValid && effectiveRate && MONEY.test(effectiveRate) && MONEY.test(discountInput)
+      ? { checkInDate: w.checkInDate, checkOutDate: w.checkOutDate, nightlyRate: effectiveRate, discountAmount: discountInput }
+      : null;
+  const quoteFetch = useKeyedFetch(
+    quoteBody ? JSON.stringify(quoteBody) : null,
+    (signal) => apiRequest<{ pricing: Quote }>("/api/reservations/quote", { method: "POST", body: quoteBody, signal }).then((d) => d.pricing),
+    250,
+  );
+  const quote = quoteFetch.data;
+  const quoteError = quoteFetch.error;
 
   // ---- Submit ----------------------------------------------------------------------
   const onSubmit = form.handleSubmit(async (v) => {
@@ -606,6 +579,10 @@ export function ReservationForm(props: ReservationFormProps) {
               </>
             ) : quoteError ? (
               <p className="text-destructive">{quoteError}</p>
+            ) : quoteFetch.loading ? (
+              <p className="text-muted-foreground flex items-center gap-2">
+                <Loader2 className="size-4 animate-spin" /> Calculating…
+              </p>
             ) : (
               <p className="text-muted-foreground">Select dates and a room to see the price.</p>
             )}
@@ -642,27 +619,12 @@ function GuestPicker({
   error?: string;
 }) {
   const [q, setQ] = useState("");
-  const [hits, setHits] = useState<GuestHit[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (q.trim().length < 2) {
-      setHits([]);
-      return;
-    }
-    const ctrl = new AbortController();
-    const t = setTimeout(() => {
-      setLoading(true);
-      apiRequest<{ guests: GuestHit[] }>(`/api/guests?q=${encodeURIComponent(q)}`, { signal: ctrl.signal })
-        .then((d) => setHits(d.guests))
-        .catch(() => undefined)
-        .finally(() => setLoading(false));
-    }, 250);
-    return () => {
-      clearTimeout(t);
-      ctrl.abort();
-    };
-  }, [q]);
+  const term = q.trim();
+  const search = useKeyedFetch(term.length >= 2 ? term : null, (signal) =>
+    apiRequest<{ guests: GuestHit[] }>(`/api/guests?q=${encodeURIComponent(term)}`, { signal }).then((d) => d.guests),
+  250);
+  const hits = search.data ?? [];
+  const loading = search.loading;
 
   if (selected) {
     return (

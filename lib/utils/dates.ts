@@ -89,3 +89,26 @@ export function isValidTimeZone(tz: string): boolean {
     return false;
   }
 }
+
+/** The UTC instant for a hotel-local wall-clock time (e.g. 2026-10-25 14:00 in Asia/Kolkata). */
+export function zonedInstant(date: ISODate, time: string, timeZone: string): Date {
+  const [h, m] = time.split(":").map(Number);
+  const [y, mo, d] = date.split("-").map(Number);
+  const target = Date.UTC(y, mo - 1, d, h, m);
+  let guess = target;
+  for (let i = 0; i < 2; i++) {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).formatToParts(new Date(guess));
+    const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+    const shown = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"));
+    guess += target - shown;
+  }
+  return new Date(guess);
+}

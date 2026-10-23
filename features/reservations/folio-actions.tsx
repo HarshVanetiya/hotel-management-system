@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Loader2 } from "lucide-react";
@@ -73,8 +73,8 @@ export function AddChargeDialog({ reservationId, currency, trigger }: { reservat
     });
     if (res) setOpen(false);
   });
-  const q = form.watch("quantity");
-  const p = form.watch("unitPrice");
+  const q = useWatch({ control: form.control, name: "quantity" });
+  const p = useWatch({ control: form.control, name: "unitPrice" });
   const preview = Number.isInteger(q) && /^\d+(\.\d{1,2})?$/.test(p ?? "") ? formatMoney((Number(p) * q).toFixed(2), currency) : null;
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -148,12 +148,13 @@ export function RefundDialog({
     resolver: zodResolver(refundSchema),
     defaultValues: { amount: maxAmount, method: defaultMethod, reason: "", transactionReference: "" },
   });
-  useEffect(() => {
-    if (open) {
+  function handleOpenChange(next: boolean) {
+    if (next) {
       setKey(crypto.randomUUID());
       form.reset({ amount: maxAmount, method: defaultMethod, reason: "", transactionReference: "" });
     }
-  }, [open, form, maxAmount, defaultMethod]);
+    setOpen(next);
+  }
   const allMethods = Array.from(new Set([defaultMethod, ...methods]));
   const onSubmit = form.handleSubmit(async (values) => {
     const res = await run(
@@ -169,7 +170,7 @@ export function RefundDialog({
     if (res) setOpen(false);
   });
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent>
         <DialogHeader>

@@ -31,20 +31,29 @@ function createDb(): Database {
     // reservation and payment workflows require (the HTTP driver does not).
     neonConfig.webSocketConstructor = ws;
     const pool = new NeonPool({ connectionString });
+    globalForDb.__hmsPool = pool;
     // Both drivers expose the same PgDatabase query API; the cast unifies the
     // driver-specific result HKT so services can be written once.
     return drizzleNeon({ client: pool, schema }) as unknown as Database;
   }
   const pool = new pg.Pool({ connectionString, max: 10 });
+  globalForDb.__hmsPool = pool;
   return drizzlePg({ client: pool, schema });
 }
 
-const globalForDb = globalThis as unknown as { __hmsDb?: Database };
+const globalForDb = globalThis as unknown as { __hmsDb?: Database; __hmsPool?: { end: () => Promise<void> } };
 
 /** Lazily-created singleton (reused across hot reloads in development). */
 export function getDb(): Database {
   if (!globalForDb.__hmsDb) globalForDb.__hmsDb = createDb();
   return globalForDb.__hmsDb;
+}
+
+/** Closes the connection pool (CLI scripts only). */
+export async function closeDb(): Promise<void> {
+  await globalForDb.__hmsPool?.end();
+  globalForDb.__hmsDb = undefined;
+  globalForDb.__hmsPool = undefined;
 }
 
 export const db: Database = new Proxy({} as Database, {

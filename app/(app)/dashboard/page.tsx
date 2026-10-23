@@ -98,9 +98,9 @@ export default async function DashboardPage() {
           tone="good"
         />
         <StatCard
-          label="Outstanding balances"
+          label="Balances due"
           value={formatMoney(d.outstanding.amount, currency)}
-          hint={`${d.outstanding.reservations} open reservations owe money`}
+          hint={`${d.outstanding.reservations} in-house / departed stays · ${formatMoney(d.outstanding.upcomingAmount, currency)} unpaid on future bookings`}
           icon={Wallet}
           tone={Number(d.outstanding.amount) > 0 ? "warn" : "default"}
         />
